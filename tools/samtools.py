@@ -12,7 +12,7 @@
     Actually, Travis CI still has issues with pysam and stdout even with --nocapture.
 '''
 
-import tools
+import tools, util.file
 import logging, os, os.path
 import pysam
 
