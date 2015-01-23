@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+
+import pysam, sys
+
+
+_commands = {
+    'view': pysam.view,
+    'sort': pysam.sort,
+    'reheader': pysam.reheader,
+    'faidx': pysam.faidx,
+    'index': pysam.index,
+    'idxstats': pysam.idxstats,
+    'merge': pysam.merge,
+    'fixmate': pysam.fixmate,
+    'mpileup': pysam.mpileup,
+    'tview': pysam.tview,
+    'bam2fq': pysam.bam2fq,
+}
+
+def samtools_replacement(cmd, args):
+    if cmd in _commands:
+        if args:
+            for x in _commands[cmd](*args):
+                print(x.rstrip('\n'))
+        else:
+            print(_commands[cmd].usage())
+    else:
+        raise NotImplementedError("never heard of "+cmd)
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("pysam-wrapped samtools command line")
+    else:
+        samtools_replacement(sys.argv[1], sys.argv[2:])
+

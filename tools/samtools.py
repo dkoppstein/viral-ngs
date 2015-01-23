@@ -12,42 +12,23 @@
     Actually, Travis CI still has issues with pysam and stdout even with --nocapture.
 '''
 
-import logging, tools, util.file
-import os, os.path, subprocess
-#import pysam
-
-tool_version = '0.1.19'
-url = 'http://sourceforge.net/projects/samtools/files/samtools/' \
-    + '{ver}/samtools-{ver}.tar.bz2'.format(ver=tool_version)
+import tools
+import logging, os, os.path
+import pysam
 
 log = logging.getLogger(__name__)
 
 class SamtoolsTool(tools.Tool) :
-    def __init__(self, install_methods = None) :
-        if install_methods == None :
-            install_methods = [
-                tools.DownloadPackage(url, 'samtools-{}/samtools'.format(tool_version),
-                    post_download_command='cd samtools-{}; make -s'.format(tool_version))]
-        tools.Tool.__init__(self, install_methods = install_methods)
+    def __init__(self):
+        tools.Tool.__init__(self, install_methods = [NoInstall(
+            os.path.join(util.file.get_scripts_path(), 'samtools'))])
     
-    def version(self) :
-        return tool_version
-    
-    def execute(self, command, args, stdin=None, stdout=None):
-        toolCmd = [self.install_and_get_path(), command] + args
-        log.debug(' '.join(toolCmd))
-        if stdin:
-            stdin = open(stdin, 'r')
-        if stdout:
-            stdout = open(stdout, 'w')
-        subprocess.check_call(toolCmd, stdin=stdin, stdout=stdout)
-        if stdin:
-            stdin.close()
-        if stdout:
-            stdout.close()
+    def version(self):
+        return pysam.__samtools_version__
 
     def view(self, args, inFile, outFile, regions=[]):
-        self.execute('view', args + ['-o', outFile, inFile] + regions)
+        opts = args + ['-o', outFile, inFile] + regions
+        pysam.view(*opts)
     
     def faidx(self, inFasta, overwrite=False):
         ''' Index reference genome for samtools '''
@@ -57,29 +38,39 @@ class SamtoolsTool(tools.Tool) :
                 os.unlink(outfname)
             else:
                 return
-        #pysam.faidx(inFasta)
-        self.execute('faidx', [inFasta])
+        pysam.faidx(inFasta)
     
     def reheader(self, inBam, headerFile, outBam):
         self.execute('reheader', [headerFile, inBam], stdout=outBam)
     
-    def dumpHeader(self, inBam, outHeader) :
+    def dumpHeader(self, inBam, outHeader):
         if inBam.endswith('.bam'):
-            opts = ['-H']
+            opts = ['-H', '-o', outHeader, inBam]
         elif inBam.endswith('.sam'):
-            opts = ['-H', '-S']
-        #header = pysam.view(*opts)
-        self.view(opts, inBam, outHeader)
+            opts = ['-H', '-S', '-o', outHeader, inBam]
+        pysam.view(*opts)
     
     def getHeader(self, inBam):
-        tmpf = util.file.mkstempfname('.txt')
-        self.dumpHeader(inBam, tmpf)
-        with open(tmpf, 'rt') as inf:
-            header = list(line.rstrip('\n').split('\t') for line in inf)
-        os.unlink(tmpf)
-        return header
+        if inBam.endswith('.bam'):
+            opt = '-H'
+        elif inBam.endswith('.sam'):
+            opt = '-HS'
+        header = pysam.view(opt, inBam)
+        return list(line.rstrip('\n').split('\t') for line in header)
     
     def count(self, inBam, opts=[], regions=[]):
-        cmd = [self.install_and_get_path(), 'view', '-c'] + opts + [inBam] + regions
-        #return int(pysam.view(*cmd)[0].strip())
-        return int(subprocess.check_output(cmd).strip())
+        cmd = ['-c'] + opts + [inBam] + regions
+        return int(pysam.view(*cmd)[0].strip())
+
+
+class NoInstall(tools.InstallMethod):
+    def __init__(self, path):
+        self.path = path
+        self.installed = True
+        InstallMethod.__init__(self)
+    def _attempt_install(self):
+        pass
+    def is_installed(self):
+        return True
+    def executable_path(self):
+        return self.path
