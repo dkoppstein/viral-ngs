@@ -67,7 +67,7 @@ class NoInstall(tools.InstallMethod):
     def __init__(self, path):
         self.path = path
         self.installed = True
-        InstallMethod.__init__(self)
+        tools.InstallMethod.__init__(self)
     def _attempt_install(self):
         pass
     def is_installed(self):
