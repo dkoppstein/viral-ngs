@@ -59,6 +59,8 @@ class SamtoolsTool(tools.Tool) :
         return list(line.rstrip('\n').split('\t') for line in header)
     
     def count(self, inBam, opts=[], regions=[]):
+        if inBam.endswith('.sam') and '-S' not in opts:
+            opts = ['-S'] + opts
         cmd = ['-c'] + opts + [inBam] + regions
         return int(pysam.view(*cmd)[0].strip())
 

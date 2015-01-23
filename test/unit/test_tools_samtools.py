@@ -10,7 +10,7 @@ class TestToolSamtools(TestCaseWithTmp):
 
     def test_count_bam(self):
         sam = os.path.join(util.file.get_test_input_path(self), 'simple.sam')
-        n = tools.samtools.SamtoolsTool().count(sam, ['-S'])
+        n = tools.samtools.SamtoolsTool().count(sam)
         self.assertEqual(n, 2)
         
     def test_fasta_index(self):
