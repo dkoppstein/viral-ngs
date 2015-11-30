@@ -21,6 +21,7 @@ python:
 
 before_install:
   - travis/before_install.sh
+  - sudo apt-get install -yq perl
 
 install:
   - travis/install-pip.sh
