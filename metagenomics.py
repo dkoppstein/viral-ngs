@@ -657,6 +657,23 @@ def parser_diamond(parser=argparse.ArgumentParser()):
     util.cmd.attach_main(parser, diamond, split_args=True)
     return parser
 
+def cluster_configs(
+    inFasta,
+    outFasta,
+    dupeReport=None,
+    outBam=None,
+    dupeLca=None,
+    outLca=None,
+    sensitive=None,
+    JVMmemory=None,
+    numThreads=None,
+    picardOptions=None,
+    min_score_to_output=None,
+):
+    '''
+    Cluster contigs
+    '''
+
 
 def align_rna_metagenomics(
     inBam,
@@ -727,6 +744,13 @@ def sam_lca_report(tax_db, bam_aligned, outReport, outLca=None, unique_only=None
         for line in kraken_dfs_report(tax_db, hits):
             print(line, file=f)
 
+def parser_cluster_contigs(parser=argparse.ArgumentParser()):
+    parser.add_argument('inFasta', help='Input contigs in FASTA.')
+    parser.add_argument('outFasta', help='Output FASTA.')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, align_rna_metagenomics, split_args=True)
+    return parser
 
 def parser_align_rna_metagenomics(parser=argparse.ArgumentParser()):
     parser.add_argument('inBam', help='Input unaligned reads, BAM format.')
@@ -833,6 +857,7 @@ __commands__.append(('diamond', parser_diamond))
 __commands__.append(('krona', parser_krona))
 __commands__.append(('align_rna', parser_align_rna_metagenomics))
 __commands__.append(('report_merge', parser_metagenomic_report_merge))
+__commands__.append(('cluster_contigs', parser_cluster_contigs))
 
 
 def full_parser():

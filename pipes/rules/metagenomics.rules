@@ -86,3 +86,11 @@ rule krona_import_taxonomy:
         """
         {config[bin_dir]}/metagenomics.py krona {input} {config[krona_db]} {output} --noRank
         """
+
+rule cluster_trinity:
+    input: config["tmp_dir"] +'/'+config["subdirs"]["assembly"]+'/{sample}.assembly1-trinity.fasta'
+    output: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.trinity-clusters.fasta'
+    shell:
+        """
+        {config[bin_dir]}/metagenomics.py cdhit {input} {config[krona_db]} {output} --noRank
+        """
