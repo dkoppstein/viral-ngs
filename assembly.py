@@ -64,8 +64,8 @@ def trim_rmdup_subsamp_reads(inBam, clipDb, outBam, n_reads=100000):
     downsamplesam = tools.picard.DownsampleSamTool()
     samtools = tools.samtools.SamtoolsTool()
 
-    if n_reads < 1:
-        raise Exception()
+    if n_reads < 0:
+        raise ValueError('Number of subsample reads must be positive')
 
     # BAM -> fastq
     infq = list(map(util.file.mkstempfname, ['.in.1.fastq', '.in.2.fastq']))
@@ -134,7 +134,7 @@ def trim_rmdup_subsamp_reads(inBam, clipDb, outBam, n_reads=100000):
     # --- subsampling ---
 
     # if we have too few paired reads after trimming and de-duplication, we can incorporate unpaired reads to reach the desired count
-    if n_rmdup_paired * 2 < n_reads:
+    if n_rmdup_paired * 2 < n_reads or n_reads == 0:
         # the unpaired reads from the trim operation, and the singletons from Prinseq
         unpaired_concat = util.file.mkstempfname('.unpaired.fastq')
 
@@ -163,11 +163,14 @@ def trim_rmdup_subsamp_reads(inBam, clipDb, outBam, n_reads=100000):
             tools.picard.FastqToSamTool().execute(unpaired_concat_rmdup, None, 'Dummy', tmp_bam_unpaired)
 
             tmp_bam_unpaired_subsamp = util.file.mkstempfname('.unpaired.subsamp.bam')
-            reads_to_add = (n_reads - (n_rmdup_paired * 2))
+            if n_reads > 0:
+                reads_to_add = (n_reads - (n_rmdup_paired * 2))
 
-            downsamplesam.downsample_to_approx_count(tmp_bam_unpaired, tmp_bam_unpaired_subsamp, reads_to_add)
+                downsamplesam.downsample_to_approx_count(tmp_bam_unpaired, tmp_bam_unpaired_subsamp, reads_to_add)
+                os.unlink(tmp_bam_unpaired)
+            else:
+                tmp_bam_unpaired_subsamp = tmp_bam_unpaired
             n_unpaired_subsamp = samtools.count(tmp_bam_unpaired_subsamp)
-            os.unlink(tmp_bam_unpaired)
 
             # merge the subsampled unpaired reads into the bam to be used as
             tmp_bam_merged = util.file.mkstempfname('.merged.bam')
@@ -182,15 +185,19 @@ def trim_rmdup_subsamp_reads(inBam, clipDb, outBam, n_reads=100000):
 
     else:
         did_include_subsampled_unpaired_reads = False
-        log.info("PRE-SUBSAMPLE COUNT: %s read pairs", n_rmdup_paired)
 
-        tmp_bam_paired_subsamp = util.file.mkstempfname('.unpaired.subsamp.bam')
-        downsamplesam.downsample_to_approx_count(tmp_bam_paired, tmp_bam_paired_subsamp, n_reads)
-        n_paired_subsamp = samtools.count(tmp_bam_paired_subsamp) // 2    # count is pairs
-        n_output = n_paired_subsamp * 2    # count is individual reads
+        if n_reads > 0:
+            log.info("PRE-SUBSAMPLE COUNT: %s read pairs", n_rmdup_paired)
 
-        tools.samtools.SamtoolsTool().reheader(tmp_bam_paired_subsamp, tmp_header, outBam)
-        os.unlink(tmp_bam_paired_subsamp)
+            tmp_bam_paired_subsamp = util.file.mkstempfname('.unpaired.subsamp.bam')
+            downsamplesam.downsample_to_approx_count(tmp_bam_paired, tmp_bam_paired_subsamp, n_reads)
+            n_paired_subsamp = samtools.count(tmp_bam_paired_subsamp) // 2    # count is pairs
+            n_output = n_paired_subsamp * 2    # count is individual reads
+
+            tools.samtools.SamtoolsTool().reheader(tmp_bam_paired_subsamp, tmp_header, outBam)
+            os.unlink(tmp_bam_paired_subsamp)
+        else:
+            tools.samtools.SamtoolsTool().reheader(tmp_bam_paired, tmp_header, outBam)
 
     os.unlink(tmp_bam_paired)
     os.unlink(tmp_header)
@@ -244,6 +251,8 @@ def trim_rmdup_subsamp_reads(inBam, clipDb, outBam, n_reads=100000):
     return (n_input * 2, n_trim * 2, n_rmdup * 2, n_output, n_paired_subsamp * 2, n_unpaired_subsamp)
 
 
+
+
 def parser_trim_rmdup_subsamp(parser=argparse.ArgumentParser()):
     parser.add_argument('inBam', help='Input reads, unaligned BAM format.')
     parser.add_argument('clipDb', help='Trimmomatic clip DB.')
@@ -287,7 +296,6 @@ def assemble_trinity(
                  'CLIPPING_ATTRIBUTE': tools.picard.SamToFastqTool.illumina_clipping_attribute,
                  'CLIPPING_ACTION': 'X'
     }
-
     read_stats = trim_rmdup_subsamp_reads(inBam, clipDb, subsamp_bam, n_reads=n_reads)
     subsampfq = list(map(util.file.mkstempfname, ['.subsamp.1.fastq', '.subsamp.2.fastq']))
     tools.picard.SamToFastqTool().execute(subsamp_bam, subsampfq[0], subsampfq[1], picardOptions=tools.picard.PicardTools.dict_to_picard_opts(picard_opts))

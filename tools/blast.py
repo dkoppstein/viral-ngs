@@ -34,6 +34,11 @@ class BlastnTool(BlastTools):
     subtool_name = 'blastn'
 
 
+class Rpsblast(BlastTools):
+    """ Tool wrapper for rpsblast """
+    subtool_name = 'rpsblast'
+
+
 class MakeblastdbTool(BlastTools):
     """ Tool wrapper for makeblastdb """
     subtool_name = 'makeblastdb'

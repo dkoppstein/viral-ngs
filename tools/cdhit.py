@@ -12,31 +12,40 @@ import subprocess
 import tools
 import util.file
 
-TOOL_VERSION = '0.8.22'
-CONDA_VERSION = tools.CondaPackageVersion('0.8.22', '2')
+TOOL_VERSION = '4.6.6'
+CONDA_VERSION = tools.CondaPackageVersion('4.6.6', '0')
 
 log = logging.getLogger(__name__)
 
 class CdHit(tools.Tool):
 
-    SUBCOMMANDS = ['makedb', 'blastx', 'blastp', 'view']
+    COMMANDS = [
+        'cd-hit',
+        'cd-hit-est',
+        'cd-hit-2d',
+        'cd-hit-est-2d',
+
+        ]
 
     def __init__(self, install_methods=None):
         if not install_methods:
             install_methods = [
-                tools.CondaPackage("diamond", version=CONDA_VERSION)
+                tools.CondaPackage("cd-hit", version=CONDA_VERSION)
             ]
-        super(Diamond, self).__init__(install_methods=install_methods)
+        super(CdHit, self).__init__(install_methods=install_methods)
 
-    def cd_hit_est(self, input_files, options=None, option_string=None):
+    def execute(self, command, input_fn, output_fn, options=None, option_string=None):
         '''Perform a clustering on DNA/RNA sequences
 
         Args:
-          db: Diamond database file.
-          query_files: List of input fastq files.
-          diamond_alignment: Diamond alignment output file. Must end in .daa
+          input_fn: Input fasta filename
+          output_fn: Output fasta filename
         '''
-        cmd = [self.install_and_get_path()]
+        assert command in self.COMMANDS
+        cmd = [os.path.join(os.path.dirname(self.install_and_get_path()), command)]
+        cmd.extend(['-i', input_fn])
+        cmd.extend(['-o', output_fn])
+
         options = options or {}
         if options:
             # We need some way to allow empty options args like --log, hence

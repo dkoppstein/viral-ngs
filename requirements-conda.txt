@@ -1,8 +1,10 @@
 blast=2.6.0
 bmtagger=3.101
 bwa=0.7.15
+cd-hit=4.6.6
 diamond=0.8.36
-gatk=3.6
+gatk=3.7
+infernal=1.1.2
 kraken-all=0.10.6_eaf8fb68 # [linux]
 krona=2.7
 last=719
@@ -32,8 +34,16 @@ pytest==3.0.5
 pycodestyle
 mock==2.0.0
 six<2
+<<<<<<< HEAD
 pytest-cov==2.4.0
 pytest-catchlog==1.2.2
 pytest-xdist==1.15.0
 flake8<=3
 Jinja2==2.8
+=======
+pytest=3.0.5
+pytest-cov=2.4.0
+pytest-xdist=1.15.0
+bedtools=2.26.0
+pybedtools=0.7.8
+>>>>>>> Add infernal, prodigal, rpsblast parts

@@ -61,6 +61,14 @@ krona_db: "/idi/sabeti-scratch/yesimon/db/krona_taxonomy"
 #  - https://storage.googleapis.com/sabeti-public/meta_dbs/human_viral_rrna.tar.lz4
 align_rna_db: "/idi/sabeti-scratch/shared-resources/rna_bwa/human_viral_rrna"
 
+# Rpsblast databases for distant metagenomic homology
+rpsblast_dbs:
+  - "/idi/sabeti-scratch/shared-resources/rpsblast/Cdd"
+
+# Infernal covariance model db for distant RNA structure homology searches.
+# By default, this contains rRNA and tRNA
+infernal_db: "/idi/sabeti-scratch/shared-resources/infernal/rRNA_tRNA.cm"
+
 # Directory of the NCBI taxonomy dmp files
 # For pre-packaged hosted databases, you may download:
 #  - https://storage.googleapis.com/sabeti-public/meta_dbs/taxonomy.tar.lz4

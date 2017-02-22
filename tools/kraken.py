@@ -17,7 +17,8 @@ import util.file
 import util.misc
 from builtins import super
 
-TOOL_NAME = "kraken-all"
+# TOOL_NAME = "kraken-all"
+TOOL_NAME = "kraken"
 TOOL_VERSION = '0.10.6_eaf8fb68'
 
 log = logging.getLogger(__name__)

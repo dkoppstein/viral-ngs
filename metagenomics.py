@@ -24,11 +24,15 @@ import pysam
 import util.cmd
 import util.file
 import util.misc
+import tools.blast
 import tools.bwa
+import tools.cdhit
 import tools.diamond
+import tools.infernal
 import tools.kraken
 import tools.krona
 import tools.picard
+import tools.prodigal
 
 __commands__ = []
 
@@ -657,23 +661,6 @@ def parser_diamond(parser=argparse.ArgumentParser()):
     util.cmd.attach_main(parser, diamond, split_args=True)
     return parser
 
-def cluster_configs(
-    inFasta,
-    outFasta,
-    dupeReport=None,
-    outBam=None,
-    dupeLca=None,
-    outLca=None,
-    sensitive=None,
-    JVMmemory=None,
-    numThreads=None,
-    picardOptions=None,
-    min_score_to_output=None,
-):
-    '''
-    Cluster contigs
-    '''
-
 
 def align_rna_metagenomics(
     inBam,
@@ -744,17 +731,114 @@ def sam_lca_report(tax_db, bam_aligned, outReport, outLca=None, unique_only=None
         for line in kraken_dfs_report(tax_db, hits):
             print(line, file=f)
 
+
+def cluster_contigs(inFasta, outFasta, numThreads=None, memory=None):
+    mem_mb = 0 if not memory else int(memory) * 1000
+    cdhit = tools.cdhit.CdHit()
+    # clustered = util.file.mkstempfname('.clustered.fa')
+    cdhit.execute('cd-hit-est', inFasta, outFasta, options={
+        '-d': 0,
+        '-g': 1,
+        '-p': 1,
+        # '-sc': 1,
+        # '-sf': 1,
+        '-T': numThreads,
+        '-M': mem_mb
+        })
+
+
+def extract_kraken_unclassified(inKrakenReads, inBam, outBam, p_threshold=0.5):
+    qnames = set()
+    with gzip.open(inKrakenReads, 'rt') as f:
+        for line in f:
+            parts = line.split('\t')
+            classified = parts[0] == 'C'
+            qname = parts[1]
+            taxid = parts[2]
+            length = parts[3]
+            p = float(parts[4].split('=')[1])
+            kmer_str = parts[5]
+            if p <= p_threshold:
+                qnames.add(qname)
+
+    in_sam = pysam.AlignmentFile(inBam, 'rb', check_sq=False)
+
+    # out_sam_f = util.file.mkstempfname('.bam')
+    out_sam = pysam.AlignmentFile(outBam, 'wb', template=in_sam)
+
+    for sam1 in in_sam:
+        if sam1.query_name in qnames:
+            out_sam.write(sam1)
+
+
+def parser_kraken_unclassified(parser=argparse.ArgumentParser()):
+    parser.add_argument('inKrakenReads', help='Input kraken reads.')
+    parser.add_argument('inBam', help='Input original bam.')
+    parser.add_argument('outBam', help='Output extracted bam')
+    parser.add_argument('-p', '--p_threshold', default=0.5, help='Kraken p threshold')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, extract_kraken_unclassified, split_args=True)
+    return parser
+
+
+def rpsblast_models(db, inFasta, outReport, orfs=None, numThreads=None):
+    prodigal = tools.prodigal.Prodigal()
+    orf_gff = util.file.mkstempfname('.orf.gff')
+    if not orfs:
+        orf_fn = util.file.mkstempfname('.fna')
+    else:
+        orf_fn = orfs
+    prodigal.execute(inFasta, output_translated_fn=orf_fn, options={
+        '-p': 'meta',
+        '-f': 'gff',
+        '-o': orf_gff
+        })
+
+    args = []
+    if int(numThreads) > 1:
+        args.extend(['-num_threads', '1'])
+
+    rpsblast = tools.blast.Rpsblast()
+    rpsblast.execute('-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport, *args)
+
+
+def infernal_rna(db, inFasta, outTbl, numThreads=None):
+    cm = tools.infernal.Infernal()
+    cm.cmscan(db, inFasta, outTbl, num_threads=numThreads)
+
+
+def parser_infernal_rna(parser=argparse.ArgumentParser()):
+    parser.add_argument('db', help='Infernal CM database to use.')
+    parser.add_argument('inFasta', help='Input contigs in FASTA.')
+    parser.add_argument('outTbl', help='Result.')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, infernal_rna, split_args=True)
+    return parser
+
+
+def parser_rpsblast_models(parser=argparse.ArgumentParser()):
+    parser.add_argument('db', help='Rpsblast cdd database to use.')
+    parser.add_argument('inFasta', help='Input contigs in FASTA.')
+    parser.add_argument('outReport', help='Result.')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    parser.add_argument('--orfs', help='Also output ORFs to file.')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, rpsblast_models, split_args=True)
+    return parser
+
 def parser_cluster_contigs(parser=argparse.ArgumentParser()):
     parser.add_argument('inFasta', help='Input contigs in FASTA.')
     parser.add_argument('outFasta', help='Output FASTA.')
     parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    parser.add_argument('--memory', default=1, help='Memory available in GB')
     util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
-    util.cmd.attach_main(parser, align_rna_metagenomics, split_args=True)
+    util.cmd.attach_main(parser, cluster_contigs, split_args=True)
     return parser
 
 def parser_align_rna_metagenomics(parser=argparse.ArgumentParser()):
     parser.add_argument('inBam', help='Input unaligned reads, BAM format.')
-    parser.add_argument('db', help='Bwa index prefix.')
+    parser.add_argument('db', help='Bwa database')
     parser.add_argument('taxDb', help='Taxonomy database directory.')
     parser.add_argument('outReport', help='Output taxonomy report.')
     parser.add_argument('--dupeReport', help='Generate report including duplicates.')
@@ -855,9 +939,12 @@ def parser_metagenomic_report_merge(parser=argparse.ArgumentParser()):
 __commands__.append(('kraken', parser_kraken))
 __commands__.append(('diamond', parser_diamond))
 __commands__.append(('krona', parser_krona))
+__commands__.append(('kraken_unclassified', parser_kraken_unclassified))
 __commands__.append(('align_rna', parser_align_rna_metagenomics))
 __commands__.append(('report_merge', parser_metagenomic_report_merge))
 __commands__.append(('cluster_contigs', parser_cluster_contigs))
+__commands__.append(('rpsblast_models', parser_rpsblast_models))
+__commands__.append(('infernal_contigs', parser_infernal_rna))
 
 
 def full_parser():
