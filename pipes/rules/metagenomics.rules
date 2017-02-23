@@ -108,9 +108,9 @@ rule unclassified_trinity:
     resources:
             mem=16,
             cores=int(config.get("number_of_threads", 1))
-    params: LSF=config.get('LSF_queues', {}).get('short', '-W 4:00'),
-            UGER=config.get('UGER_queues', {}).get('short', '-q short'),
-            extracted=join(config["data_dir"], config["subdirs"]["metagenomics"], "{sample}.kraken-unclassified.bam"),
+    params: LSF=config.get('LSF_queues', {}).get('long', '-W 4:00'),
+            UGER=config.get('UGER_queues', {}).get('long', '-q long'),
+            extracted=join(config["tmp_dir"], config["subdirs"]["metagenomics"], "{sample}.kraken-unclassified.bam"),
             logid="{sample}",
             clipDb=config["trim_clip_db"],
             subsamp_bam=config["tmp_dir"]+'/'+config["subdirs"]["assembly"]+'/{sample}.subsamp.bam',
