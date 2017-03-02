@@ -138,7 +138,7 @@ rule rpsblast_contigs:
     input: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.clustered.fasta'
     output: config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.rpsblast.tbl'
     resources:
-        mem=16,
+        mem=32,
         cores=int(config.get("number_of_threads", 1))
     params: LSF=config.get('LSF_queues', {}).get('short', '-W 4:00'),
             UGER=config.get('UGER_queues', {}).get('long', '-q long'),

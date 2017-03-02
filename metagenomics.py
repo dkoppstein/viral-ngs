@@ -801,10 +801,45 @@ def rpsblast_models(db, inFasta, outReport, orfs=None, numThreads=None):
     rpsblast = tools.blast.Rpsblast()
     rpsblast.execute('-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport, *args)
 
+def blast_contigs(db, inFasta, outReport, rpsblastDb=None, blastn_xml=None, orfs=None, numThreads=None):
+    blastn = tools.blast.BlastnTool()
+
+    bn_xml = util.file.mkstempfname('.blastn.xml')
+    blastn.execute(['-db', db, '-query', inFasta, '-out', bn_xml, '-outfmt', '5'])
+
+    prodigal = tools.prodigal.Prodigal()
+    orf_gff = util.file.mkstempfname('.orf.gff')
+    if not orfs:
+        orf_fn = util.file.mkstempfname('.fna')
+    else:
+        orf_fn = orfs
+    prodigal.execute(inFasta, output_translated_fn=orf_fn, options={
+        '-p': 'meta',
+        '-f': 'gff',
+        '-o': orf_gff
+        })
+
+    args = []
+    if int(numThreads) > 1:
+        args.extend(['-num_threads', '1'])
+
+    rpsblast = tools.blast.Rpsblast()
+    rpsblast.execute('-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport, *args)
 
 def infernal_rna(db, inFasta, outTbl, numThreads=None):
     cm = tools.infernal.Infernal()
     cm.cmscan(db, inFasta, outTbl, num_threads=numThreads)
+
+def parser_blast_contigs(parser=argparse.ArgumentParser()):
+    parser.add_argument('db', help='Rpsblast cdd database to use.')
+    parser.add_argument('inFasta', help='Input contigs in FASTA.')
+    parser.add_argument('outReport', help='Result.')
+    parser.add_argument('--rpsblastDb', help='CDD database for RPS-blast')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    parser.add_argument('--orfs', help='Also output ORFs to file.')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, rpsblast_models, split_args=True)
+    return parser
 
 
 def parser_infernal_rna(parser=argparse.ArgumentParser()):
