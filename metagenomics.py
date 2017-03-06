@@ -180,7 +180,6 @@ def blast_records(f):
             parts[field] = int(parts[field])
         if len(parts) > 12:
             parts[12] = int(parts[12])
-
             parts[14] = [int(x) for x in parts[14].split(';')
                          if x != 'N/A']
         for field in (2, 10, 11):
@@ -823,10 +822,9 @@ def blast_report(tool, db, input_fn, tax_dir=None, tax_db=None,
     elif blast_m8_fn:
         level = 0
 
-    if level > 0 and not tax_dir:
+    if level > 0 and not tax_db and not tax_dir:
         sys.stderr.write('No taxonomy db path specified\n')
         sys.exit(1)
-
 
     if level > 0 and not blast_m8_fn:
         blast_m8_fn = util.file.mkstempfname('.blastn.m8')
@@ -856,6 +854,7 @@ def blast_report(tool, db, input_fn, tax_dir=None, tax_db=None,
 def blast_taxonomy(inFasta, taxDb=None, ntDb=None, outBlastn=None, outBlastnLca=None, outBlastnReport=None,
                    nrDb=None, outBlastx=None, outBlastxLca=None, outBlastxReport=None, numThreads=None):
     executed = False
+    tax_db = None
     if outBlastn or outBlastnLca or outBlastnReport:
         assert ntDb
         blastn = tools.blast.BlastnTool()
@@ -866,6 +865,7 @@ def blast_taxonomy(inFasta, taxDb=None, ntDb=None, outBlastn=None, outBlastnLca=
 
     if outBlastx or outBlastxLca or outBlastxReport:
         assert nrDb
+
         blastx = tools.blast.BlastxTool()
         log.info('Executing blastx on %s', inFasta)
         blast_report(blastx, nrDb, inFasta, tax_dir=taxDb, tax_db=tax_db, blast_m8_fn=outBlastx, blast_report_fn=outBlastxReport,

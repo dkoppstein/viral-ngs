@@ -19,9 +19,13 @@ rule all_metagenomics_contigs:
         expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
                     "{sample}.infernal.tbl"), sample=samples),
         expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
+<<<<<<< HEAD
                     "{sample}.blastn.report"), sample=samples),
         expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
                     "{sample}.blastx.report"), sample=samples)
+=======
+                    "{sample}.blastn.report"), sample=samples)
+>>>>>>> Blast tax
     params: LSF='-N'
 
 
@@ -142,6 +146,7 @@ rule cluster_contigs:
 rule blast_taxonomy:
     input: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.clustered.fasta'
     output: blastn=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.m8',
+<<<<<<< HEAD
             blastn_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.report'
     resources:
         mem=24,
@@ -158,6 +163,10 @@ rule blast_taxonomy:
 rule blastx_taxonomy:
     input: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.clustered.fasta'
     output: blastx=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.m8',
+=======
+            blastx=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.m8',
+            blastn_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.report',
+>>>>>>> Blast tax
             blastx_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.report'
     resources:
         mem=24,
@@ -167,6 +176,10 @@ rule blastx_taxonomy:
     shell:
         """
         {config[bin_dir]}/metagenomics.py blast_taxonomy {input}  \
+<<<<<<< HEAD
+=======
+          --ntDb {config[blast_nt]} --outBlastn {output.blastn} --outBlastnReport {output.blastn_report}  \
+>>>>>>> Blast tax
           --nrDb {config[blast_nr]} --outBlastx {output.blastx} --outBlastxReport {output.blastx_report}  \
           --taxDb {config[taxonomy_db]} --numThreads {resources.cores}
         """
