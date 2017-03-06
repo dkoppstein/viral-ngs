@@ -23,10 +23,27 @@ class BlastTools(tools.Tool):
             install_methods.append(tools.CondaPackage(TOOL_NAME, executable=self.subtool_name, version=TOOL_VERSION))
         super(BlastTools, self).__init__(install_methods=install_methods)
 
-    def execute(self, *args):
+    def execute(self, args, env=None):
         cmd = [self.install_and_get_path()]
         cmd.extend(args)
-        util.misc.run_and_print(cmd, buffered=True, check=True)
+        util.misc.run_and_print(cmd, buffered=True, check=True, env=env)
+
+    def execute_db(self, db, args, env=None, num_threads=None):
+        cmd = [self.install_and_get_path()]
+        cmd.extend(['-db', db])
+        if num_threads:
+            cmd.extend(['-num_threads', str(num_threads)])
+        cmd.extend(args)
+        env = env or os.environ.copy()
+        env['BLASTDB'] = os.path.dirname(db)
+
+        util.misc.run_and_print(cmd, buffered=True, check=True, env=env)
+
+    def execute_m8_tax(self, db, args, env=None, num_threads=None):
+        outfmt = ['-outfmt', '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore sgi sacc staxids sscinames scomnames stitle']
+        args = list(args)
+        args.extend(outfmt)
+        self.execute_db(db, args, env=env, num_threads=num_threads)
 
 
 class BlastnTool(BlastTools):
@@ -63,7 +80,7 @@ class MakeblastdbTool(BlastTools):
             pass
         else:
             raise TypeError("fasta_files was not a single fasta file, nor a list of fasta files") # or something along that line
-        
+
         # if more than one fasta file is specified, join them
         # otherwise if only one is specified, just use it
         if len(fasta_files) > 1:

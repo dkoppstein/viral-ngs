@@ -27,7 +27,7 @@ bmtagger_dbs_remove:
 # For pre-built hosted databases, you may download:
 #  - https://storage.googleapis.com/sabeti-public/depletion_dbs/metag_v3.ncRNA.mRNA.mitRNA.consensus.tar.gz
 #  - https://storage.googleapis.com/sabeti-public/depletion_dbs/hybsel_probe_adapters.tar.gz
-blast_db_remove: 
+blast_db_remove:
   - "/idi/sabeti-scratch/shared-resources/depletion-databases/metag_v3.ncRNA.mRNA.mitRNA.consensus"
   - "/idi/sabeti-scratch/shared-resources/depletion-databases/hybsel_probe_adapters"
 
@@ -60,6 +60,11 @@ krona_db: "/idi/sabeti-scratch/yesimon/db/krona_taxonomy"
 # For pre-built hosted databases, you may download:
 #  - https://storage.googleapis.com/sabeti-public/meta_dbs/human_viral_rrna.tar.lz4
 align_rna_db: "/idi/sabeti-scratch/shared-resources/rna_bwa/human_viral_rrna"
+
+# Offline BLAST database paths
+blast_nt: "/idi/sabeti-scratch/shared-resources/blast/current/nt"
+
+blast_nr: "/idi/sabeti-scratch/shared-resources/blast/current/nr"
 
 # Rpsblast databases for distant metagenomic homology
 rpsblast_dbs:

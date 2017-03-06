@@ -8,6 +8,7 @@ __author__ = "yesimon@broadinstitute.org"
 
 import argparse
 import collections
+import contextlib
 import csv
 import gzip
 import itertools
@@ -135,12 +136,38 @@ class TaxonomyDb(object):
         return ranks, parents
 
 
-BlastRecord = collections.namedtuple(
-    'BlastRecord', [
-        'query_id', 'subject_id', 'percent_identity', 'aln_length', 'mismatch_count', 'gap_open_count', 'query_start',
-        'query_end', 'subject_start', 'subject_end', 'e_val', 'bit_score'
-    ]
-)
+# BlastRecord = collections.namedtuple(
+#     'BlastRecord', [
+#         'query_id', 'subject_id', 'percent_identity', 'aln_length', 'mismatch_count', 'gap_open_count', 'query_start',
+#         'query_end', 'subject_start', 'subject_end', 'e_val', 'bit_score'
+#     ]
+# )
+
+class BlastRecord(object):
+    __slots__ = ('query_id', 'subject_id', 'percent_identity', 'aln_length', 'mismatch_count', 'gap_open_count', 'query_start',
+                 'query_end', 'subject_start', 'subject_end', 'e_val', 'bit_score', 'gi', 'accession', 'taxids', 'scinames', 'comnames', 'title')
+
+    def __init__(self, *args):
+        self.query_id = None
+        self.subject_id = None
+        self.percent_identity = None
+        self.aln_length = None
+        self.mismatch_count = None
+        self.gap_open_count = None
+        self.query_start = None
+        self.query_end = None
+        self.subject_start = None
+        self.subject_end = None
+        self.e_val = None
+        self.bit_score = None
+        self.gi = None
+        self.accession = None
+        self.taxids = []
+        self.scinames = []
+        self.comnames = []
+        self.title = []
+        for attr, val in zip(self.__slots__, args):
+            setattr(self, attr, val)
 
 
 def blast_records(f):
@@ -148,9 +175,12 @@ def blast_records(f):
     for line in f:
         if line.startswith('#'):
             continue
-        parts = line.strip().split()
+        parts = line.strip().split('\t')
         for field in range(3, 10):
             parts[field] = int(parts[field])
+        if len(parts) > 12:
+            parts[12] = int(parts[12])
+            parts[14] = [int(x) for x in parts[14].split(';')]
         for field in (2, 10, 11):
             parts[field] = float(parts[field])
         yield BlastRecord(*parts)
@@ -171,9 +201,12 @@ def translate_gi_to_tax_id(db, record):
     '''Replace gi headers in subject ids to int taxonomy ids.'''
     gi = int(record.subject_id.split('|')[1])
     tax_id = db.gis[gi]
-    rec_list = list(record)
-    rec_list[1] = tax_id
-    return BlastRecord(*rec_list)
+    if tax_id > 0:
+        record.taxids.append(tax_id)
+    return record
+    # rec_list = list(record)
+    # rec_list[1] = tax_id
+    # return BlastRecord(*rec_list)
 
 
 def extract_tax_id(sam1):
@@ -236,7 +269,8 @@ def blast_lca(db,
               paired=False,
               min_bit_score=50,
               max_expected_value=0.01,
-              top_percent=10,):
+              top_percent=10,
+              with_taxids=None):
     '''Calculate the LCA taxonomy id for groups of blast hits.
 
     Writes tsv output: query_id \t tax_id
@@ -249,6 +283,7 @@ def blast_lca(db,
       min_bit_score: (float) Minimum bit score or discard.
       max_expected_value: (float) Maximum e-val or discard.
       top_percent: (float) Only this percent within top hit are used.
+      with_taxids: (bool)
     '''
     records = blast_records(m8_file)
     records = (r for r in records if r.e_val <= max_expected_value)
@@ -256,14 +291,18 @@ def blast_lca(db,
     if paired:
         records = (paired_query_id(rec) for rec in records)
     blast_groups = (v for k, v in itertools.groupby(records, operator.attrgetter('query_id')))
+    hits = collections.Counter()
     for blast_group in blast_groups:
         blast_group = list(blast_group)
-        tax_id = process_blast_hits(db, blast_group, top_percent)
+        tax_id = process_blast_hits(db, blast_group, top_percent, with_taxids=with_taxids)
         query_id = blast_group[0].query_id
-        if not tax_id:
-            log.debug('Query: {} has no valid taxonomy paths.'.format(query_id))
-        classified = 'C' if tax_id else 'U'
-        output.write('{}\t{}\t{}\n'.format(classified, query_id, tax_id))
+        hits[tax_id] += 1
+        # query_id = blast_group[0].query_id
+        # if not tax_id:
+        #     log.debug('Query: {} has no valid taxonomy paths.'.format(query_id))
+        # classified = 'C' if tax_id else 'U'
+        # output.write('{}\t{}\t{}\n'.format(classified, query_id, tax_id))
+    return hits
 
 
 def process_sam_hits(db, sam_hits, top_percent):
@@ -288,19 +327,23 @@ def process_sam_hits(db, sam_hits, top_percent):
     return coverage_lca(tax_ids, db.parents)
 
 
-def process_blast_hits(db, blast_hits, top_percent):
+def process_blast_hits(db, blast_hits, top_percent, with_taxids=False):
     '''Filter groups of blast hits and perform lca.
 
     Args:
       db: (TaxonomyDb) Taxonomy db.
       blast_hits: []BlastRecord groups of hits.
       top_percent: (float) Only consider hits within this percent of top bit score.
+      with_taxids: (bool) If blast m8 includes taxids.
 
     Return:
       (int) Tax id of LCA.
     '''
-    hits = (translate_gi_to_tax_id(db, hit) for hit in blast_hits)
-    hits = [hit for hit in hits if hit.subject_id != 0]
+    if not with_taxids:
+        hits = (translate_gi_to_tax_id(db, hit) for hit in blast_hits)
+    else:
+        hits = blast_hits
+    hits = [hit for hit in hits if len(hit.taxids)]
     if len(hits) == 0:
         return
 
@@ -311,7 +354,7 @@ def process_blast_hits(db, blast_hits, top_percent):
     # Sort requires realized list
     valid_hits.sort(key=operator.attrgetter('bit_score'), reverse=True)
     if valid_hits:
-        tax_ids = [hit.subject_id for hit in valid_hits]
+        tax_ids = list(itertools.chain(*(hit.taxids for hit in valid_hits)))
         return coverage_lca(tax_ids, db.parents)
 
 
@@ -484,6 +527,8 @@ def kraken_dfs_report(db, taxa_hits):
 
     db.children = parents_to_children(db.parents)
     total_hits = sum(taxa_hits.values())
+    if not total_hits:
+        return []
     lines = []
     kraken_dfs(db, lines, taxa_hits, total_hits, 1, 0)
     unclassified_hits = taxa_hits.get(0, 0)
@@ -732,21 +777,6 @@ def sam_lca_report(tax_db, bam_aligned, outReport, outLca=None, unique_only=None
             print(line, file=f)
 
 
-def cluster_contigs(inFasta, outFasta, numThreads=None, memory=None):
-    mem_mb = 0 if not memory else int(memory) * 1000
-    cdhit = tools.cdhit.CdHit()
-    # clustered = util.file.mkstempfname('.clustered.fa')
-    cdhit.execute('cd-hit-est', inFasta, outFasta, options={
-        '-d': 0,
-        '-g': 1,
-        '-p': 1,
-        # '-sc': 1,
-        # '-sf': 1,
-        '-T': numThreads,
-        '-M': mem_mb
-        })
-
-
 def extract_kraken_unclassified(inKrakenReads, inBam, outBam, p_threshold=0.5):
     qnames = set()
     with gzip.open(inKrakenReads, 'rt') as f:
@@ -781,6 +811,106 @@ def parser_kraken_unclassified(parser=argparse.ArgumentParser()):
     return parser
 
 
+def blast_report(tool, db, input_fn, tax_dir=None, tax_db=None,
+                 blast_m8_fn=None, blast_lca_fn=None, blast_report_fn=None,
+                 num_threads=None):
+    if blast_report_fn:
+        level = 2
+    elif blast_lca_fn:
+        level = 1
+    elif blast_m8_fn:
+        level = 0
+
+    if level > 0 and not tax_dir:
+        sys.stderr.write('No taxonomy db path specified\n')
+        sys.exit(1)
+
+
+    if level > 0 and not blast_m8_fn:
+        blast_m8_fn = util.file.mkstempfname('.blastn.m8')
+    tool.execute_m8_tax(db, ['-query', input_fn, '-out', blast_m8_fn], num_threads=num_threads)
+    if level < 1:
+        return
+
+    bn_xml = util.file.mkstempfname('.blastn.xml')
+    bn_m8 = util.file.mkstempfname('.blastn.m8')
+    bn_reads = util.file.mkstempfname('.blastn.reads')
+
+    with contextlib.ExitStack() as ctx:
+        if level > 1 and not blast_lca_fn:
+            blast_lca_fn = util.file.mkstempfname('.blastn.lca.tsv')
+
+        tax_db = tax_db or TaxonomyDb(tax_dir=tax_dir, load_names=True, load_nodes=True)
+        blast_m8 = ctx.enter_context(util.file.open_or_gzopen(blast_m8_fn, 'rt'))
+        blast_lca_f = ctx.enter_context(util.file.open_or_gzopen(blast_lca_fn, 'wt'))
+        hits = blast_lca(tax_db, blast_m8, blast_lca_f, with_taxids=True)
+
+        if level < 2:
+            return
+
+        blast_report = ctx.enter_context(util.file.open_or_gzopen(blast_report_fn, 'wt'))
+        if blast_report_fn:
+            for line in kraken_dfs_report(tax_db, hits):
+                print(line, file=blast_report)
+    return tax_db
+
+
+def blast_taxonomy(inFasta, taxDb=None, ntDb=None, outBlastn=None, outBlastnLca=None, outBlastnReport=None,
+                   nrDb=None, outBlastx=None, outBlastxLca=None, outBlastxReport=None, numThreads=None):
+    executed = False
+    if outBlastn or outBlastnLca or outBlastnReport:
+        assert ntDb
+        blastn = tools.blast.BlastnTool()
+        log.info('Executing blastn on %s', inFasta)
+        tax_db = blast_report(blastn, ntDb, inFasta, tax_dir=taxDb, blast_m8_fn=outBlastn, blast_report_fn=outBlastnReport,
+                     num_threads=numThreads)
+        executed = True
+
+    if outBlastx or outBlastxLca or outBlastxReport:
+        assert nrDb
+        blastx = tools.blast.BlastxTool()
+        log.info('Executing blastx on %s', inFasta)
+        blast_report(blastx, nrDb, inFasta, tax_dir=taxDb, tax_db=tax_db, blast_m8_fn=outBlastx, blast_report_fn=outBlastxReport,
+                     num_threads=numThreads)
+        executed = True
+
+    if not executed:
+        sys.stderr.write('No blast output specified\n')
+        sys.exit(1)
+
+
+def parser_blast_taxonomy(parser=argparse.ArgumentParser()):
+    parser.add_argument('inFasta', help='Input sequences in FASTA.')
+    parser.add_argument('--taxDb', help='Taxonomy database.')
+    parser.add_argument('--ntDb', help='Blast NT database path.')
+    parser.add_argument('--nrDb', help='Blast NR database path.')
+    parser.add_argument('--outBlastn', help='Result.')
+    parser.add_argument('--outBlastnLca', help='Result.')
+    parser.add_argument('--outBlastnReport', help='Result.')
+    parser.add_argument('--outBlastx', help='Result.')
+    parser.add_argument('--outBlastxLca', help='Result.')
+    parser.add_argument('--outBlastxReport', help='Result.')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, blast_taxonomy, split_args=True)
+    return parser
+
+
+def infernal_rna(db, inFasta, outTbl, numThreads=None):
+    cm = tools.infernal.Infernal()
+    cm.cmscan(db, inFasta, outTbl, num_threads=numThreads)
+
+
+def parser_infernal_rna(parser=argparse.ArgumentParser()):
+    parser.add_argument('db', help='Infernal CM database to use.')
+    parser.add_argument('inFasta', help='Input contigs in FASTA.')
+    parser.add_argument('outTbl', help='Result.')
+    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
+    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
+    util.cmd.attach_main(parser, infernal_rna, split_args=True)
+    return parser
+
+
 def rpsblast_models(db, inFasta, outReport, orfs=None, numThreads=None):
     prodigal = tools.prodigal.Prodigal()
     orf_gff = util.file.mkstempfname('.orf.gff')
@@ -798,58 +928,11 @@ def rpsblast_models(db, inFasta, outReport, orfs=None, numThreads=None):
     if int(numThreads) > 1:
         args.extend(['-num_threads', '1'])
 
-    rpsblast = tools.blast.Rpsblast()
-    rpsblast.execute('-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport, *args)
-
-def blast_contigs(db, inFasta, outReport, rpsblastDb=None, blastn_xml=None, orfs=None, numThreads=None):
-    blastn = tools.blast.BlastnTool()
-
-    bn_xml = util.file.mkstempfname('.blastn.xml')
-    blastn.execute(['-db', db, '-query', inFasta, '-out', bn_xml, '-outfmt', '5'])
-
-    prodigal = tools.prodigal.Prodigal()
-    orf_gff = util.file.mkstempfname('.orf.gff')
-    if not orfs:
-        orf_fn = util.file.mkstempfname('.fna')
-    else:
-        orf_fn = orfs
-    prodigal.execute(inFasta, output_translated_fn=orf_fn, options={
-        '-p': 'meta',
-        '-f': 'gff',
-        '-o': orf_gff
-        })
-
-    args = []
-    if int(numThreads) > 1:
-        args.extend(['-num_threads', '1'])
+    args.extend(['-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport])
 
     rpsblast = tools.blast.Rpsblast()
-    rpsblast.execute('-db', db, '-outfmt', '6', '-query', orf_fn, '-out', outReport, *args)
 
-def infernal_rna(db, inFasta, outTbl, numThreads=None):
-    cm = tools.infernal.Infernal()
-    cm.cmscan(db, inFasta, outTbl, num_threads=numThreads)
-
-def parser_blast_contigs(parser=argparse.ArgumentParser()):
-    parser.add_argument('db', help='Rpsblast cdd database to use.')
-    parser.add_argument('inFasta', help='Input contigs in FASTA.')
-    parser.add_argument('outReport', help='Result.')
-    parser.add_argument('--rpsblastDb', help='CDD database for RPS-blast')
-    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
-    parser.add_argument('--orfs', help='Also output ORFs to file.')
-    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
-    util.cmd.attach_main(parser, rpsblast_models, split_args=True)
-    return parser
-
-
-def parser_infernal_rna(parser=argparse.ArgumentParser()):
-    parser.add_argument('db', help='Infernal CM database to use.')
-    parser.add_argument('inFasta', help='Input contigs in FASTA.')
-    parser.add_argument('outTbl', help='Result.')
-    parser.add_argument('--numThreads', default=1, help='Number of threads (default: %(default)s)')
-    util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
-    util.cmd.attach_main(parser, infernal_rna, split_args=True)
-    return parser
+    rpsblast.execute(args)
 
 
 def parser_rpsblast_models(parser=argparse.ArgumentParser()):
@@ -862,6 +945,22 @@ def parser_rpsblast_models(parser=argparse.ArgumentParser()):
     util.cmd.attach_main(parser, rpsblast_models, split_args=True)
     return parser
 
+
+def cluster_contigs(inFasta, outFasta, numThreads=None, memory=None):
+    mem_mb = 0 if not memory else int(memory) * 1000
+    cdhit = tools.cdhit.CdHit()
+    # clustered = util.file.mkstempfname('.clustered.fa')
+    cdhit.execute('cd-hit-est', inFasta, outFasta, options={
+        '-d': 0,
+        '-g': 1,
+        '-p': 1,
+        # '-sc': 1,
+        # '-sf': 1,
+        '-T': numThreads,
+        '-M': mem_mb
+        })
+
+
 def parser_cluster_contigs(parser=argparse.ArgumentParser()):
     parser.add_argument('inFasta', help='Input contigs in FASTA.')
     parser.add_argument('outFasta', help='Output FASTA.')
@@ -870,6 +969,7 @@ def parser_cluster_contigs(parser=argparse.ArgumentParser()):
     util.cmd.common_args(parser, (('loglevel', None), ('version', None), ('tmp_dir', None)))
     util.cmd.attach_main(parser, cluster_contigs, split_args=True)
     return parser
+
 
 def parser_align_rna_metagenomics(parser=argparse.ArgumentParser()):
     parser.add_argument('inBam', help='Input unaligned reads, BAM format.')
@@ -980,6 +1080,7 @@ __commands__.append(('report_merge', parser_metagenomic_report_merge))
 __commands__.append(('cluster_contigs', parser_cluster_contigs))
 __commands__.append(('rpsblast_models', parser_rpsblast_models))
 __commands__.append(('infernal_contigs', parser_infernal_rna))
+__commands__.append(('blast_taxonomy', parser_blast_taxonomy))
 
 
 def full_parser():
