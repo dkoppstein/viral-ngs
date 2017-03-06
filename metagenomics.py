@@ -832,10 +832,6 @@ def blast_report(tool, db, input_fn, tax_dir=None, tax_db=None,
     if level < 1:
         return
 
-    bn_xml = util.file.mkstempfname('.blastn.xml')
-    bn_m8 = util.file.mkstempfname('.blastn.m8')
-    bn_reads = util.file.mkstempfname('.blastn.reads')
-
     with contextlib.ExitStack() as ctx:
         if level > 1 and not blast_lca_fn:
             blast_lca_fn = util.file.mkstempfname('.blastn.lca.tsv')
