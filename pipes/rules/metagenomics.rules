@@ -18,8 +18,8 @@ rule all_metagenomics_contigs:
                     "{sample}.rpsblast.tbl"), sample=samples),
         expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
                     "{sample}.infernal.tbl"), sample=samples),
-        expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
-                    "{sample}.blastn.report"), sample=samples)
+        # expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
+        #             "{sample}.blastn.report"), sample=samples)
     params: LSF='-N'
 
 rule all_metagenomics_host_depleted:

@@ -180,7 +180,9 @@ def blast_records(f):
             parts[field] = int(parts[field])
         if len(parts) > 12:
             parts[12] = int(parts[12])
-            parts[14] = [int(x) for x in parts[14].split(';')]
+
+            parts[14] = [int(x) for x in parts[14].split(';')
+                         if x != 'N/A']
         for field in (2, 10, 11):
             parts[field] = float(parts[field])
         yield BlastRecord(*parts)
