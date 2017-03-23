@@ -18,9 +18,12 @@ rule all_metagenomics_contigs:
                     "{sample}.rpsblast.tbl"), sample=samples),
         expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
                     "{sample}.infernal.tbl"), sample=samples),
-        # expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
-        #             "{sample}.blastn.report"), sample=samples)
+        expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
+                    "{sample}.blastn.report"), sample=samples),
+        expand(join(config["data_dir"], config["subdirs"]["metagenomics"],
+                    "{sample}.blastx.report"), sample=samples)
     params: LSF='-N'
+
 
 rule all_metagenomics_host_depleted:
     input:
@@ -139,9 +142,7 @@ rule cluster_contigs:
 rule blast_taxonomy:
     input: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.clustered.fasta'
     output: blastn=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.m8',
-            blastx=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.m8',
-            blastn_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.report',
-            blastx_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.report'
+            blastn_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastn.report'
     resources:
         mem=24,
         cores=int(config.get("number_of_threads", 1))
@@ -151,6 +152,21 @@ rule blast_taxonomy:
         """
         {config[bin_dir]}/metagenomics.py blast_taxonomy {input}  \
           --ntDb {config[blast_nt]} --outBlastn {output.blastn} --outBlastnReport {output.blastn_report}  \
+          --taxDb {config[taxonomy_db]} --numThreads {resources.cores}
+        """
+
+rule blastx_taxonomy:
+    input: config["tmp_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.clustered.fasta'
+    output: blastx=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.m8',
+            blastx_report=config["data_dir"] + '/' + config["subdirs"]["metagenomics"] + '/{sample}.blastx.report'
+    resources:
+        mem=24,
+        cores=int(config.get("number_of_threads", 1))
+    params: LSF=config.get('LSF_queues', {}).get('short', '-W 4:00'),
+            UGER=config.get('UGER_queues', {}).get('long', '-q long'),
+    shell:
+        """
+        {config[bin_dir]}/metagenomics.py blast_taxonomy {input}  \
           --nrDb {config[blast_nr]} --outBlastx {output.blastx} --outBlastxReport {output.blastx_report}  \
           --taxDb {config[taxonomy_db]} --numThreads {resources.cores}
         """
